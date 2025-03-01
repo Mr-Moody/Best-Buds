@@ -1,0 +1,24 @@
+<CameraScreen>:
+    name: "camera"
+
+    BoxLayout:
+        orientation: "vertical"
+
+        Camera:
+            id: camera_widget
+            resolution: (640, 480)
+            play: True      # starts cam feed
+            size_hint_y: 0.8
+        
+        Button:
+            background_color: app.colours["accent"]
+            size_hint_y: 0.2
+            size_hint_x: 0.1
+            on_release: app.capture_picture()
+
+        Label:
+            id: camera_label
+            text: "Take a picture of your plant!"
+            font_size: 30
+            font_name: "SecondaryFont"
+            halign: "center"

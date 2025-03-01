@@ -1,0 +1,110 @@
+<CustomImageButton@RelativeLayout>:
+    image_source: ""
+    screen_name: ""
+    bg_colour: app.colours["inactive"]
+
+    canvas.before:
+        Color:
+            rgba: self.bg_colour
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    Button:
+        size_hint: (1, 1)
+        background_normal: ""
+        background_down: ""
+        background_color: (1, 1, 1, 0)  # Transparent button
+        on_release: app.change_screen(root.screen_name, self)
+
+    Image:
+        source: root.image_source
+        reload: True
+        size_hint: (None, None)
+        size: (50, 50)
+        pos_hint: {"center_x": 0.5, "center_y": 0.5}
+
+BoxLayout:
+    orientation: 'vertical'
+
+    # hello, ___! 
+    BoxLayout:
+        id: greeting_bar
+        size_hint_y: 0.15
+        padding: [20, 5]
+
+        canvas.before:
+            Color:
+                rgba: app.colours["inactive"]
+            Rectangle:
+                pos: self.pos
+                size: self.size
+                
+        Label:
+            id: greeting_label
+            text: app.greeting_text
+            font_size: 45
+            font_name: "MainFont"
+            color: 1, 1, 1, 1  # text colour (white rn)
+            bold: True
+            halign: "left"
+            valign: "center"
+            size_hint_x: None
+            width: self.texture_size[0] + 20    # where 20 is the x padding
+
+    # Main Content Area
+    ScreenManager:
+        id: screen_manager
+
+        HomeScreen:
+        CalendarScreen:
+        CameraScreen:
+        SettingsScreen:
+
+        Screen:
+            name: "home"
+        Screen:
+            name: "calendar"
+        Screen:
+            name: "camera"
+        Screen:
+            name: "settings"
+
+
+    # Bottom Navigation Bar
+    BoxLayout:
+        id: nav_bar
+        size_hint_y: 0.1
+        spacing: 0  # gaps
+        height: 50
+        padding: 0  # padding around buttons
+
+        canvas.before:
+            Color:
+                rgba: app.colours["inactive"]
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        CustomImageButton:
+            id: home_button
+            image_source: "static/icons/home_icon.png"
+            screen_name: "home"
+            size_hint_x: 1
+
+        CustomImageButton:
+            id: calendar_button
+            screen_name: "calendar"
+            image_source: "static/icons/calendar_icon.png"
+            size_hint_x: 1
+
+        CustomImageButton:
+            id: camera_button
+            screen_name: "camera"
+            image_source: "static/icons/camera_icon.png"
+            size_hint_x: 1
+
+        CustomImageButton:
+            id: settings_button
+            screen_name: "settings"
+            image_source: "static/icons/settings_icon.png"
+            size_hint_x: 1
