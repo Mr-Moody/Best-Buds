@@ -92,17 +92,30 @@ class CameraScreen(Screen):
         Clock.unschedule(self.update_camera)
     
     def update_camera(self, dt):
-        # capture frame and display
+        # Capture frame from OpenCV
         ret, frame = self.capture.read()
         if ret:
-            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)    # rotate cam
-            
+            # Get frame dimensions
+            height, width, _ = frame.shape
+
+            # Determine the smaller dimension to create a square crop
+            min_dim = min(height, width)
+            x_start = (width - min_dim) // 2  # Center crop horizontally
+            y_start = (height - min_dim) // 2  # Center crop vertically
+            cropped_frame = frame[y_start:y_start + min_dim, x_start:x_start + min_dim]
+
+            # Resize to match widget size without distortion
             square_size = int(min(self.ids.camera_widget.size))
-            frame_resized = cv2.resize(frame, (square_size, square_size), interpolation=cv2.INTER_AREA)
+            frame_resized = cv2.resize(cropped_frame, (square_size, square_size), interpolation=cv2.INTER_AREA)
+
+            # Convert frame to texture
             buf = cv2.flip(frame_resized, 0).tobytes()
             texture = Texture.create(size=(frame_resized.shape[1], frame_resized.shape[0]), colorfmt='bgr')
-            texture.blit_buffer(buf,colorfmt='bgr', bufferfmt='ubyte')
+            texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+
+            # Assign the texture to the camera widget
             self.ids.camera_widget.texture = texture
+
 
 class SettingsScreen(Screen):
     def __init__(self, **kw):
@@ -193,8 +206,8 @@ class BestBuds(MDApp):
 
     def change_user_name(self, new_name):
         self.username = new_name  
-        self.update_greeting()
-
+        self.update_greeting()    
+            
     def capture_picture(self):
         # take piccy
         camera_screen = self.root.ids.screen_manager.get_screen("camera")
@@ -202,21 +215,81 @@ class BestBuds(MDApp):
         #get piccy from opencv
         ret, frame = camera_screen.capture.read()
         if not ret:
-            print("no piccy taken :(")
+            print("No photo captured :(")
             return
         
+        # Get frame dimensions
+        height, width, _ = frame.shape
+
+        # Determine the smaller dimension for cropping to a square
+        min_dim = min(height, width)
+        x_start = (width - min_dim) // 2  # Center crop horizontally
+        y_start = (height - min_dim) // 2  # Center crop vertically
+        cropped_frame = frame[y_start:y_start + min_dim, x_start:x_start + min_dim]  # Crop square region
+
+        # Resize (optional) - Keeps the image consistent in size
+        final_size = 512  # Example size, adjust as needed
+        final_image = cv2.resize(cropped_frame, (final_size, final_size), interpolation=cv2.INTER_AREA)
+
+        # Convert OpenCV image to Kivy Texture
+        buf = cv2.flip(final_image, 0).tobytes()
+        texture = Texture.create(size=(final_image.shape[1], final_image.shape[0]), colorfmt='bgr')
+        texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+
+        # Show confirmation popup with the generated texture
+        self.show_confirmation_popup(final_image, texture)
+
+    def save_captured_image(self, image, popup):
         # check how many already exist in the folder to number then sequentially
         existing_images = [f for f in os.listdir("images") if f.endswith(".png")]
         next_number = len(existing_images) + 1
-        
+
         filename = f"images/plant_{next_number}.png"
-        cv2.imwrite(filename, frame)     # save image to folder
+        cv2.imwrite(filename, image)  # save the cropped image
         
         if os.path.exists(filename):
             print(f"{filename} picture saved!")
         else:
             print(f"where'd my photo go")
-    
+            
+        popup.dismiss()
+        # wait for user confirmation
+        # Convert OpenCV image to Kivy Texture
+        # buf = cv2.flip(final_image, 0).tobytes()
+        # texture = Texture.create(size=(final_image.shape[1], final_image.shape[0]), colorfmt='bgr')
+        # texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+
+    def show_confirmation_popup(self, image, texture):
+        """ Displays a popup asking the user to confirm or retake the picture. """
+        
+        layout = BoxLayout(orientation="vertical", spacing=10, padding=10)
+
+        # Show the image
+        img_widget = Image(texture=texture, size_hint=(1, 1))
+        
+        # Buttons layout
+        buttons = BoxLayout(size_hint=(1, 0.3), spacing=10)
+
+        # Confirm button
+        confirm_btn = Button(text="Confirm", size_hint=(0.5, 1))
+        confirm_btn.bind(on_release=lambda x: self.save_captured_image(image, popup))
+
+        # Retake button
+        retake_btn = Button(text="Retake", size_hint=(0.5, 1))
+        retake_btn.bind(on_release=lambda x: popup.dismiss())
+
+        buttons.add_widget(confirm_btn)
+        buttons.add_widget(retake_btn)
+
+        # Add elements to the layout
+        layout.add_widget(img_widget)
+        layout.add_widget(buttons)
+
+        # Create popup
+        popup = Popup(title="Confirm Photo", content=layout, size_hint=(0.8, 0.8), auto_dismiss=False)
+        
+        # Open popup
+        popup.open()
 
 class PlantViewer(ScrollView):  # Change from Widget to ScrollView
     def __init__(self, **kwargs):
