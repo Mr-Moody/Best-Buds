@@ -13,6 +13,8 @@ from kivy.uix.popup import Popup
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.lang import Builder
 from kivy.metrics import dp
+from kivy.lang import Builder
+from kivy.metrics import dp
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.widget import Widget
@@ -103,7 +105,7 @@ class SettingsScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
 
-class MyApp(MDApp):
+class BestBuds(MDApp):
     current_screen = StringProperty("home") # tracks current screen and StringProperty is used to auto update UI
     buttons = ObjectProperty(None)          # stores button ids or something idk
     greeting_text = StringProperty("Hello, _____!")      # hello hotbar 
