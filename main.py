@@ -238,6 +238,12 @@ class BestBuds(MDApp):
     def change_user_name(self, new_name):
         self.username = new_name  
         self.update_greeting()    
+        
+        # if settings screen is open, update textinput value
+        if self.root:
+            settings_screen = self.root.ids.screen_manager.get_screen("settings")
+            if settings_screen:
+                settings_screen.ids.username_input.text = new_name
             
     def capture_picture(self, identify=True):
         # take piccy
@@ -271,21 +277,47 @@ class BestBuds(MDApp):
         self.show_confirmation_popup(final_image, texture, identify)
 
     def save_captured_image(self, image, popup, identify=True):
+        # print(f"✅ save_captured_image() called. Identify = {identify}")
+        
         #check if directory exists yet
         if not os.path.exists("images"):
             os.makedirs("images")
             
         save_dir = "images/plants" if identify else "images/health"
         
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-            
-        # check how many already exist in the folder to number then sequentially
+        # check how many already exist in the folder to number then sequentially number them
         existing_images = [f for f in os.listdir(save_dir) if f.endswith(".png")]
         next_number = len(existing_images) + 1
-
+        
+        # create the filename first - but don't save yet
         filename = f"{save_dir}/plant_{next_number}.png"
         cv2.imwrite(filename, image)  # save the cropped image
+        
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        
+        plant_name, health_status = None, None      # initialise to prevent unboundlocalerror
+
+        if identify:
+            # print("🟢 Calling identify_plant_with_openai()...")
+            plant_name = self.identify_plant_with_openai(filename)
+            print(f"🔍 Plant name received: {plant_name}")
+            if plant_name: 
+                message = f"Identified Plant: {plant_name}"
+            else:
+                message = "This does not appear to be a plant :("  
+        else:
+            health_status = self.check_plant_health(filename)        
+            if health_status:
+                message = f"Health status: {health_status}"
+            else:
+                message = "No issues detected - you have a healthy plant!"
+                
+        if identify and plant_name is None:
+            popup.dismiss()
+            msg = "This is not a plant, image will not be saved!"
+            self.not_a_plant_popup(msg)
+            return  # exit function without saving
         
         if os.path.exists(filename):
             print(f"{filename} picture saved!")
@@ -299,22 +331,12 @@ class BestBuds(MDApp):
         # texture = Texture.create(size=(final_image.shape[1], final_image.shape[0]), colorfmt='bgr')
         # texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
         
-        plant_name, health_status = None, None      # initialise to prevent unboundlocalerror
         
-        if identify:
-            plant_name = self.identify_plant_with_openai(filename)
-            if plant_name: 
-                print(f"Identified Plant: {plant_name}")
-            else:
-                print("This does not appear to be a plant :(")
-            
-            
-        else:
-            health_status = self.check_plant_health(filename)        
-            if health_status:
-                print(f"Health status: {health_status}")
-            else:
-                print("No issues detected - you have a healthy plant!")
+        # print to terminal
+        print(message)
+        
+        #show in a popup
+        self.show_ai_result_popup(message)
     
     def identify_plant_with_openai(self, image_path):
         
@@ -324,31 +346,34 @@ class BestBuds(MDApp):
         try:
             # read file in binary code
             with open(image_path, "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode()
+                image_data = image_file.read()
+                print(f"image size: {len(image_data)} bytes")
+                if len(image_data) < 1000:
+                    print("Image file is too small! Check if it's being saved correctly.")
+                base64_image = base64.b64encode(image_data).decode()
                 
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert botanist. Identify the plant in the given image"
-                                    "If the image contains no plant, say 'No plant detected'"
+                        "content": "You are an expert botanist. Identify the plant in the given image.\n"
+                                    "If the image contains leaves, stems, flowers, or any other plant part, describe the most likely plant.\n"
+                                    "If the image contains no plant, say 'No plant detected'.\n"
                                     "If unsure, say 'Unclear, but this might be a plant"
                     },
                     {
                         "role": "user",
                         "content": [
                             {"type": "text", "text": "Is there a plant? If so, what plant is this?"},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/png;base64,{base64_image}"}
-                            }
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}}
                         ]
                     }
                 ],
-                max_tokens=50
+                max_tokens=100
             )
-                
+            
+            print(f"🟢 OpenAI Raw Response: {response}")
             result = response.choices[0].message.content.strip()
             
             if "no plant" in result.lower() or "not a plant" in result.lower():
@@ -438,6 +463,45 @@ class BestBuds(MDApp):
         
         # Open popup
         popup.open()
+
+    def show_ai_result_popup(self, message):
+        # displays ai results in a popup
+        layout = BoxLayout(orientation="vertical", spacing=10, padding=10)
+        
+        result_label = Label(text=message, color=(0,0,0,1), font_size=40,font_name="SecondaryFont", halign="center", valign="center", size_hint_y=0.8)
+        result_label.bind(size=result_label.setter("text_size"))  # Ensures proper text wrapping
+        
+        close_btn = Button(text="OK", size_hint_y=0.2, background_color=self.colours["active"], background_normal="")
+        close_btn.bind(on_release=lambda x: popup.dismiss())
+
+        layout.add_widget(result_label)
+        layout.add_widget(close_btn)
+
+        popup = Popup(title="AI Analysis Result", content=layout, size_hint=(0.8, 0.5), auto_dismiss=True)
+        popup.background = ""
+        popup.title_size = 0
+        popup.background_color = (1,1,1,1)
+        popup.open()
+
+    def not_a_plant_popup(self, msg):
+        # popup for when no plant is detected
+        layout = BoxLayout(orientation="vertical", spacing=10, padding=10)
+        
+        result_label = Label(text=msg, color=(0,0,0,1), font_size=40,font_name="SecondaryFont", halign="center", valign="center", size_hint_y=0.8)
+        result_label.bind(size=result_label.setter("text_size"))  # Ensures proper text wrapping
+        
+        close_btn = Button(text="OK", size_hint_y=0.2, background_color=self.colours["active"], background_normal="")
+        close_btn.bind(on_release=lambda x: popup.dismiss())
+
+        layout.add_widget(result_label)
+        layout.add_widget(close_btn)
+
+        popup = Popup(title="No plant", content=layout, size_hint=(0.8, 0.5), auto_dismiss=False)
+        popup.background = ""
+        popup.title_size = 0
+        popup.background_color = (1,1,1,1)
+        popup.open()
+        
 
 class PlantViewer(ScrollView):  # Change from Widget to ScrollView
     def __init__(self, **kwargs):
