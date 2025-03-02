@@ -2,7 +2,6 @@ from datetime import datetime
 from kivy.clock import Clock        # for scheduling when to update time for greeting
 
 from kivy.app import App
-from kivy.lang import Builder
 from kivy.metrics import dp
 from kivy.uix.image import Image
 from kivy.uix.boxlayout import BoxLayout
@@ -17,6 +16,7 @@ from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.widget import Widget
 from kivy.uix.camera import Camera  # for taking photos
+from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.screenmanager import ScreenManager, Screen    # for the diff screens
 from kivy.graphics import Color, RoundedRectangle
@@ -24,14 +24,14 @@ from kivy.graphics import Color, RoundedRectangle
 from kivy.core.window import Window     # for fixed window
 from kivy.properties import StringProperty, ObjectProperty, DictProperty  # for idek what man property -> for dynamic variables
 
+from kivy.lang import Builder
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.button import MDFillRoundFlatButton
+from kivymd.uix.pickers import MDDatePicker
 from kivymd.uix.textfield import MDTextField
-from kivymd.uix.button import MDRaisedButton
 from kivy.core.text import LabelBase    # for fonts
 from kivy.graphics.texture import Texture   # for camera screen display?
-
-from database import DB
 
 import os
 from PIL import Image as PILImage  # for image manipulation
@@ -54,6 +54,8 @@ LabelBase.register(name="SecondaryFont", fn_regular="static/fonts/Comfortaa_stat
 
 if not os.path.exists("images"):
     os.makedirs("images")
+    
+KV_FILES = ["home.kv", "calendar.kv", "camera.kv", "settings.kv"]   # load in the diff screens
 
 COLOURS = {
     "active": (0.576, 0.749, 0.51, 1),        # dark green
@@ -72,20 +74,16 @@ class CustomImageButton(RelativeLayout):
     
 # for all the screens
 class HomeScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def build(self):
+    def __init__(self, **kw):
+        super().__init__(**kw)
         layout = BoxLayout(orientation="vertical", padding=5, spacing=5)
             
         self.plant_viewer = PlantViewer(size_hint=(1, 0.2))  # Make it span across the screen
         layout.add_widget(self.plant_viewer)
 
-        return layout
-
 class CalendarScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, **kw):
+        super().__init__(**kw)
 
 class CameraScreen(Screen):
     def on_enter(self):
@@ -131,16 +129,22 @@ class CameraScreen(Screen):
 
 
 class SettingsScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, **kw):
+        super().__init__(**kw)
 
-class BestBuds(MDApp):    
+class BestBuds(MDApp):
+    current_screen = StringProperty("home") # tracks current screen and StringProperty is used to auto update UI
+    buttons = ObjectProperty(None)          # stores button ids or something idk
+    greeting_text = StringProperty("Hello, _____!")      # hello hotbar 
+    colours = DictProperty(COLOURS)         # to access COLOUR[] in the .kv file
+    username = StringProperty("user")
+    
     def build(self):
-        print("Building the app...")
         self.theme_cls.primary_palette = "Green"
         self.load_kv_files()  # load external kv files
         # return btn = ButtonWidget()
         root = Builder.load_file("myapp.kv")
+        self.root = root
 
         screen_manager = root.ids.screen_manager
         screen_manager.clear_widgets()
@@ -151,22 +155,24 @@ class BestBuds(MDApp):
         screen_manager.add_widget(SettingsScreen(name="settings"))
 
         self.buttons = {
-            "home": root.ids.home_button,
-            "calendar": root.ids.calendar_button,
-            "camera": root.ids.camera_button,
-            "settings": root.ids.settings_button,
+            "home": self.root.ids.home_button,
+            "calendar": self.root.ids.calendar_button,
+            "camera": self.root.ids.camera_button,
+            "settings": self.root.ids.settings_button,
         }
-
-        self.update_greeting()
-        Clock.schedule_once(self.update_greeting, 0.5)  # makes sure it updates after the UI loads
-        self.change_user_name("Tara")
-        return root
+        print(self.buttons)
 
         layout = BoxLayout(orientation="vertical", padding=5, spacing=5)
         self.plant_viewer = PlantViewer(size_hint=(1, 0.2))  # Make it span across the screen
         layout.add_widget(self.plant_viewer)
 
-        return layout
+        home_screen = screen_manager.get_screen("home")
+        home_screen.add_widget(layout)
+        
+        self.update_greeting()
+        Clock.schedule_once(self.update_greeting, 0.5)  # makes sure it updates after the UI loads
+        self.change_user_name("Tara")
+        return root
     
     def load_kv_files(self):
         # load the kv files
@@ -317,8 +323,7 @@ class BestBuds(MDApp):
             print(f"{filename} picture saved!")
         else:
             print(f"where'd my photo go")
-        
-                    
+            
         popup.dismiss()
         # wait for user confirmation
         # Convert OpenCV image to Kivy Texture
@@ -496,10 +501,9 @@ class BestBuds(MDApp):
         popup.title_size = 0
         popup.background_color = (1,1,1,1)
         popup.open()
- 
-    
+        
 
-class PlantViewer(ScrollView):
+class PlantViewer(ScrollView):  # Change from Widget to ScrollView
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
@@ -603,7 +607,73 @@ class PlantForm(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        Builder.load_file("plant_form.kv")
+        with self.canvas.before:
+            Color(0.2, 0.6, 0.2, 1)
+            self.rect = RoundedRectangle(size=self.size, pos=self.pos, radius=[20, ])
+
+        self.bind(size=self.update_graphics, pos=self.update_graphics)
+
+        self.orientation = "vertical"
+        self.spacing = 10
+        self.padding = 10
+        self.size_hint = (1, 1)
+
+        scroll_view = ScrollView(size_hint=(1, 1), do_scroll_x=False)
+
+        #form fields
+        self.layout = BoxLayout(orientation="vertical", spacing=10, padding=10, size_hint_y=None)
+        self.layout.bind(minimum_height=self.layout.setter("height"))
+
+        self.name_label = Label(text="Plant Name")
+        self.name_input = MDTextField(hint_text="Enter plant name", size_hint_y=None, height=40)
+        
+        self.species_label = Label(text="Species")
+        self.species_input = MDTextField(hint_text="Enter species", size_hint_y=None, height=40)
+        
+        self.birth_date_label = Label(text="Birth Date (YYYY-MM-DD)")
+        self.birth_date_input = MDTextField(hint_text="Select birth date", size_hint_y=None, height=40)
+        self.birth_date_input.bind(focus=self.show_date_picker)
+        
+        self.height_label = Label(text="Plant Height (cm)")
+        self.height_input = MDTextField(input_filter="int", hint_text="Enter height", size_hint_y=None, height=40)
+
+        self.water_label = Label(text="Water Frequency (days)")
+        self.water_spinner = MDTextField(input_filter="int", hint_text="Enter how often you need to water your plant", size_hint_y=None, height=40)
+
+        self.fert_label = Label(text="Do you need fertiliser?")
+        self.fert_checkbox = CheckBox(active=self.toggle_fertiliser_fields, size_hint_y=None, height=40)
+
+        self.fert_type_label = Label(text="Fertiliser Type")
+        self.fert_type_input = MDTextField(hint_text="Enter fertiliser type", size_hint_y=None, height=40)
+
+        self.fert_freq_label = Label(text="Fertiliser Frequency (days)")
+        self.fert_freq_input = MDTextField(input_filter="int", hint_text="Enter fertiliser frequency", size_hint_y=None, height=40)
+
+        self.submit_btn = Button(text="Submit", size_hint_y=None, height=50)
+        self.submit_btn.bind(on_press=self.submit_form)
+
+        #add widgets to layout
+        self.layout.add_widget(self.name_label)
+        self.layout.add_widget(self.name_input)
+        self.layout.add_widget(self.species_label)
+        self.layout.add_widget(self.species_input)
+        self.layout.add_widget(self.birth_date_label)
+        self.layout.add_widget(self.birth_date_input)
+        self.layout.add_widget(self.height_label)
+        self.layout.add_widget(self.height_input)
+        self.layout.add_widget(self.water_label)
+        self.layout.add_widget(self.water_spinner)
+        self.layout.add_widget(self.fert_label)
+        self.layout.add_widget(self.fert_checkbox)
+        self.layout.add_widget(self.fert_type_label)
+        self.layout.add_widget(self.fert_type_input)
+        self.layout.add_widget(self.fert_freq_label)
+        self.layout.add_widget(self.fert_freq_input)
+        self.layout.add_widget(self.submit_btn)
+
+        scroll_view.add_widget(self.layout)
+
+        self.add_widget(scroll_view)
 
     def update_graphics(self, *args):
         #update background position and size when layout is resized
@@ -620,14 +690,19 @@ class PlantForm(BoxLayout):
 
 
     def confirm_date(self, instance, value, date_range):
-        self.birth_date_input.text = str(value)
         self.birth_date = value
 
-    def toggle_fertiliser_fields(self, checkbox, active):
-        self.ids.fert_type_input.disabled = not active
-        self.ids.fert_freq_input.disabled = not active
-        self.ids.fert_type_input.opacity = 1 if active else 0.5
-        self.ids.fert_freq_input.opacity = 1 if active else 0.5
+    def toggle_fertiliser_fields(self, instance, value):
+        if value:
+            self.fert_type_label.opacity = 1
+            self.fert_type_input.opacity = 1
+            self.fert_freq_label.opacity = 1
+            self.fert_freq_input.opacity = 1
+        else:
+            self.fert_type_label.opacity = 0
+            self.fert_type_input.opacity = 0
+            self.fert_freq_label.opacity = 0
+            self.fert_freq_input.opacity = 0
 
     def submit_form(self, instance):
         # Get the values from the form
