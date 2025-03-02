@@ -30,6 +30,8 @@ from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.button import MDFillRoundFlatButton
 from kivymd.uix.pickers import MDDatePicker
 from kivymd.uix.textfield import MDTextField
+from kivymd.uix.label import MDLabel
+from kivymd.uix.list import MDList, OneLineListItem
 from kivy.core.text import LabelBase    # for fonts
 from kivy.graphics.texture import Texture   # for camera screen display?
 
@@ -74,16 +76,61 @@ class CustomImageButton(RelativeLayout):
     
 # for all the screens
 class HomeScreen(Screen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        layout = BoxLayout(orientation="vertical", padding=5, spacing=5)
-            
-        self.plant_viewer = PlantViewer(size_hint=(1, 0.2))  # Make it span across the screen
-        layout.add_widget(self.plant_viewer)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layout = MDBoxLayout(orientation="vertical", spacing=10, padding=10)
+
+        #title label for list of plants needing watering
+        self.title_label = MDLabel(text="Your plants:", font_style="H5", size_hint_y=None, height=50)
+        self.layout.add_widget(self.title_label)
+
+        self.plant_viewer = PlantViewer()
+        self.layout.add_widget(self.plant_viewer)
+
+        self.add_widget(self.layout)
 
 class CalendarScreen(Screen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.plants_needing_water = []
+        
+        self.layout = MDBoxLayout(orientation="vertical", spacing=10, padding=10)
+        
+        #title label for list of plants needing watering
+        self.title_label = MDLabel(text="Plants to Water Today:", font_style="H5", size_hint_y=None, height=50)
+        self.layout.add_widget(self.title_label)
+
+        self.scroll_view = ScrollView()
+        self.plant_list = MDList()
+        self.scroll_view.add_widget(self.plant_list)
+        self.layout.add_widget(self.scroll_view)
+
+        self.add_widget(self.layout)
+
+        self.update_plant_list(datetime.today().strftime("%Y-%m-%d"))
+
+    def update_plant_list(self, selected_date_str:str):
+        #clear previous list
+        self.plant_list.clear_widgets()
+
+        #get the plants for the selected date
+        user_plants = db.get_user_plants()
+
+        selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+
+        for plant in user_plants:
+            delta_days = (selected_date - plant.birth_date).days
+
+            if delta_days >= 0 and delta_days % plant.water_frequency == 0:
+                self.plants_needing_water.append(plant)
+
+        if len(self.plants_needing_water) > 0:
+            for plant in self.plants_needing_water:
+                self.plant_list.add_widget(OneLineListItem(text=f"{plant.name} - Water every {plant.water_frequency} days"))
+        else:
+            self.plant_list.add_widget(OneLineListItem(text="No plants need watering."))
+
 
 class CameraScreen(Screen):
     def on_enter(self):
@@ -129,8 +176,8 @@ class CameraScreen(Screen):
 
 
 class SettingsScreen(Screen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
 class BestBuds(MDApp):
     current_screen = StringProperty("home") # tracks current screen and StringProperty is used to auto update UI
@@ -142,7 +189,7 @@ class BestBuds(MDApp):
     def build(self):
         self.theme_cls.primary_palette = "Green"
         self.load_kv_files()  # load external kv files
-        # return btn = ButtonWidget()
+
         root = Builder.load_file("myapp.kv")
         self.root = root
 
@@ -160,14 +207,9 @@ class BestBuds(MDApp):
             "camera": self.root.ids.camera_button,
             "settings": self.root.ids.settings_button,
         }
-        print(self.buttons)
-
-        layout = BoxLayout(orientation="vertical", padding=5, spacing=5)
-        self.plant_viewer = PlantViewer(size_hint=(1, 0.2))  # Make it span across the screen
-        layout.add_widget(self.plant_viewer)
+        
 
         home_screen = screen_manager.get_screen("home")
-        home_screen.add_widget(layout)
         
         self.update_greeting()
         Clock.schedule_once(self.update_greeting, 0.5)  # makes sure it updates after the UI loads
@@ -373,7 +415,7 @@ class BestBuds(MDApp):
                 max_tokens=100
             )
             
-            print(f"🟢 OpenAI Raw Response: {response}")
+            # print(f"🟢 OpenAI Raw Response: {response}")
             result = response.choices[0].message.content.strip()
             
             if "no plant" in result.lower() or "not a plant" in result.lower():
@@ -468,7 +510,7 @@ class BestBuds(MDApp):
         # displays ai results in a popup
         layout = BoxLayout(orientation="vertical", spacing=10, padding=10)
         
-        result_label = Label(text=message, color=(0,0,0,1), font_size=40,font_name="SecondaryFont", halign="center", valign="center", size_hint_y=0.8)
+        result_label = Label(text=message, color=(0,0,0,1), font_size=25,font_name="SecondaryFont", halign="center", valign="center", size_hint_y=0.8)
         result_label.bind(size=result_label.setter("text_size"))  # Ensures proper text wrapping
         
         close_btn = Button(text="OK", size_hint_y=0.2, background_color=self.colours["active"], background_normal="")
@@ -503,7 +545,7 @@ class BestBuds(MDApp):
         popup.open()
         
 
-class PlantViewer(ScrollView):  # Change from Widget to ScrollView
+class PlantViewer(ScrollView):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
@@ -512,35 +554,38 @@ class PlantViewer(ScrollView):  # Change from Widget to ScrollView
 
         plants = db.get_user_plants()
         self.populate_plants(plants)
-        create_plant_btn = NewPlant(size_hint=(None, 1), size=(100, 100))
+
+        #add new plant button
+        create_plant_btn = NewPlant(size_hint=(None, None), size=(200, 300))
+        create_plant_btn.size_hint_y = 0.5
         self.layout.add_widget(create_plant_btn)
         self.add_widget(self.layout)
     
     def populate_plants(self, plants:list) -> None:
         for i in range(len(plants)):
-            btn = PlantWidget(size_hint=(None, 1), size=(100, 100))
+            btn = PlantWidget(size_hint=(None, None), size=(200, 300))
             btn.set_image(plants[i].id)
-            btn.set_name(plants[i].name)
+            btn.set_name(plants[i].name, plants[i].species)
             self.layout.add_widget(btn)
 
 
 class PlantWidget(ButtonBehavior, BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.size_hint_y = 0.25
+        self.size_hint_y = 0.5
 
         with self.canvas.before:
-            Color(0.8, 0.8, 0.8, 1)  # Grey border
-            self.border = RoundedRectangle(pos=self.pos, size=self.size, radius=[20, ])
+            Color(0.8, 0.8, 0.8, 1)
+            self.border = RoundedRectangle(pos=self.pos, size=self.size, radius=[10, ])
             
-            Color(1, 1, 1, 1)  # White background
-            self.background = RoundedRectangle(pos=(self.x + 2, self.y + 2), size=(self.width - 4, self.height - 4), radius=[20, ])
+            Color(1, 1, 1, 1)
+            self.background = RoundedRectangle(pos=(self.x + 2, self.y + 2), size=(self.width - 4, self.height - 4), radius=[10, ])
 
         self.bind(pos=self.update_graphics, size=self.update_graphics)
 
         layout = BoxLayout(orientation="vertical", padding=5, spacing=5)
-        self.image = Image(source=None, size_hint=(1, 0.7))  # Image on top
-        self.label = Label(text="Name", size_hint=(1, 0.3), color=(20, 220, 40, 1))  # Label below the image
+        self.image = Image(source=None, size_hint=(1, 0.7))
+        self.label = Label(text="Name", size_hint=(1, 0.3), color=(0, 0, 0, 1))
         
         layout.add_widget(self.image)
         layout.add_widget(self.label)
@@ -553,10 +598,10 @@ class PlantWidget(ButtonBehavior, BoxLayout):
         self.background.size = (self.width - 4, self.height - 4)
 
     def set_image(self, plant_id):
-        self.image.source = f"{dir_path}/images/plants/{plant_id}.jpg"
+        self.image.source = f"{dir_path}/images/plants/plant_{plant_id}.png"
 
-    def set_name(self, name):
-        self.label.text = name
+    def set_name(self, name, species):
+        self.label.text = f"{name} - {species}"
 
     def on_press(self):
         print("Rounded button pressed!")
@@ -569,15 +614,15 @@ class NewPlant(ButtonBehavior, BoxLayout):
 
         with self.canvas.before:
             Color(0.8, 0.8, 0.8, 1)  # Grey border
-            self.border = RoundedRectangle(pos=self.pos, size=self.size, radius=[20, ])
+            self.border = RoundedRectangle(pos=self.pos, size=self.size, radius=[10, ])
             
             Color(1, 1, 1, 1)  # White background
-            self.background = RoundedRectangle(pos=(self.x + 2, self.y + 2), size=(self.width - 4, self.height - 4), radius=[20, ])
+            self.background = RoundedRectangle(pos=(self.x + 2, self.y + 2), size=(self.width - 4, self.height - 4), radius=[10, ])
 
         self.bind(pos=self.update_graphics, size=self.update_graphics)
 
         layout = BoxLayout(orientation="vertical", padding=5, spacing=5)
-        self.image = Image(source=f"{dir_path}/static/icons/plus.png", size_hint=(0.7, 0.7), pos_hint={"x":0.15,"y":1})
+        self.image = Image(source=f"{dir_path}/static/icons/plus.png", size_hint=(0.3,0.3), pos_hint={"center_x": 0.5, "center_y": 0.5})
         
         layout.add_widget(self.image)
         self.add_widget(layout)
@@ -589,14 +634,14 @@ class NewPlant(ButtonBehavior, BoxLayout):
         self.background.size = (self.width - 4, self.height - 4)
 
     def set_image(self, plant_id):
-        self.image.source = f"{dir_path}/images/plants/{plant_id}.jpg"
+        self.image.source = f"{dir_path}/images/plants/plant_{plant_id}.png"
 
     def set_name(self, name):
         self.label.text = name
 
     def on_press(self):
         content = PlantForm(size_hint=(1,1))
-        popup = CustomPopup(content=content, auto_dismiss=False, size_hint=(0.8,0.8), title="Add new plant")
+        popup = CustomPopup(content=content, auto_dismiss=True, size_hint=(0.8,0.8), title="Add new plant to your collection!", background="", background_color=(0,0,0,0), separator_color=(0,0,0,0))
 
         content.bind(on_press=popup.dismiss)
 
@@ -608,7 +653,7 @@ class PlantForm(BoxLayout):
         super().__init__(**kwargs)
 
         with self.canvas.before:
-            Color(0.2, 0.6, 0.2, 1)
+            Color(255, 255, 255, 1)
             self.rect = RoundedRectangle(size=self.size, pos=self.pos, radius=[20, ])
 
         self.bind(size=self.update_graphics, pos=self.update_graphics)
@@ -624,18 +669,22 @@ class PlantForm(BoxLayout):
         self.layout = BoxLayout(orientation="vertical", spacing=10, padding=10, size_hint_y=None)
         self.layout.bind(minimum_height=self.layout.setter("height"))
 
+        self.image_label = Label(text="Plant Image")
+        self.image_icon = Button(text="Take Plant Picture", background_normal="", background_color=COLOURS["inactive"], size_hint=(None, None), size=(200, 50))
+        self.image_icon.bind(on_press=self.take_picture)
+
         self.name_label = Label(text="Plant Name")
         self.name_input = MDTextField(hint_text="Enter plant name", size_hint_y=None, height=40)
         
         self.species_label = Label(text="Species")
-        self.species_input = MDTextField(hint_text="Enter species", size_hint_y=None, height=40)
+        self.species_input = MDTextField(hint_text="Enter species", size_hint_y=None, height=40, text_color_normal=(255, 255, 255, 1), text_color_focus=(0, 0, 0, 1))
         
         self.birth_date_label = Label(text="Birth Date (YYYY-MM-DD)")
         self.birth_date_input = MDTextField(hint_text="Select birth date", size_hint_y=None, height=40)
         self.birth_date_input.bind(focus=self.show_date_picker)
         
         self.height_label = Label(text="Plant Height (cm)")
-        self.height_input = MDTextField(input_filter="int", hint_text="Enter height", size_hint_y=None, height=40)
+        self.height_input = MDTextField(input_filter="float", hint_text="Enter height", size_hint_y=None, height=40)
 
         self.water_label = Label(text="Water Frequency (days)")
         self.water_spinner = MDTextField(input_filter="int", hint_text="Enter how often you need to water your plant", size_hint_y=None, height=40)
@@ -653,6 +702,8 @@ class PlantForm(BoxLayout):
         self.submit_btn.bind(on_press=self.submit_form)
 
         #add widgets to layout
+        self.layout.add_widget(self.image_label)
+        self.layout.add_widget(self.image_icon)
         self.layout.add_widget(self.name_label)
         self.layout.add_widget(self.name_input)
         self.layout.add_widget(self.species_label)
@@ -680,17 +731,63 @@ class PlantForm(BoxLayout):
         self.rect.pos = self.pos
         self.rect.size = self.size
 
+    def take_picture(self, instance):
+        """ This function will trigger the camera to take a picture. """
+        
+        # Open the camera screen to capture an image
+        camera_screen = self.parent.parent.ids.screen_manager.get_screen("camera")
+        
+        # Capture the image (camera capture code, modify according to your camera class)
+        ret, frame = camera_screen.capture.read()
+        if not ret:
+            print("Failed to capture image.")
+            return
+        
+        # Resize the image to be square and save it
+        height, width, _ = frame.shape
+        min_dim = min(height, width)
+        x_start = (width - min_dim) // 2
+        y_start = (height - min_dim) // 2
+        cropped_frame = frame[y_start:y_start + min_dim, x_start:x_start + min_dim]
+        
+        final_size = 512
+        final_image = cv2.resize(cropped_frame, (final_size, final_size), interpolation=cv2.INTER_AREA)
+
+        # Convert the OpenCV image to a Kivy Texture for preview
+        buf = cv2.flip(final_image, 0).tobytes()
+        texture = Texture.create(size=(final_image.shape[1], final_image.shape[0]), colorfmt='bgr')
+        texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+
+        # Update the image preview with the captured picture
+        self.image_preview.texture = texture
+
+        # Save the image
+        self.save_captured_image(final_image)
+    
+    def save_captured_image(self, image):
+        """ Save the captured image to the local folder. """
+        # Check how many images already exist and name this one accordingly
+        existing_images = [f for f in os.listdir("images") if f.endswith(".png")]
+        next_number = len(existing_images) + 1
+
+        filename = f"images/plant_{next_number}.png"
+        cv2.imwrite(filename, image)  # Save the image to the filesystem
+        
+        print(f"Picture saved as {filename}")
+
     def show_date_picker(self, instance, focus):
         if not focus:
             return
 
-        date_dialog = MDDatePicker()
+        date_dialog = MDDatePicker(size_hint=(0.8,0.4), pos_hint={"x":0.1, "y":0.2})
         date_dialog.bind(on_save=self.confirm_date)
         date_dialog.open()
 
 
     def confirm_date(self, instance, value, date_range):
+        print(f"birth date value: {value}")
         self.birth_date = value
+        self.birth_date_input.text = f"{value}"
 
     def toggle_fertiliser_fields(self, instance, value):
         if value:
@@ -719,18 +816,47 @@ class PlantForm(BoxLayout):
             fertiliser_type = None
             fertiliser_freq = None
 
-        # Show the collected data in a popup or process it
-        print(f"Name: {name} Species: {species} Birth Date: {self.birth_date} Height: {height} Water Frequency: {water_frequency} days Fertiliser Needed: {fertiliser_needed} Fertiliser Type: {fertiliser_type} Fertiliser Frequency: {fertiliser_freq} days")
-        #popup.open()
+        error = ""
 
-        # Clear form after submission
-        self.name_input.text = ''
-        self.species_input.text = ''
-        self.birth_date_input.text = ''
-        self.height_input.text = ''
-        self.fert_checkbox.active = False
-        self.fert_type_input.text = ''
-        self.fert_freq_input.text = ''
+        print(f"Height: {height}")
+        #input validation
+        if len(name) <= 0:
+            error = "No name has been inputted."
+        elif len(species) <= 0:
+            error = "No species has been inputted."
+        elif height == "":
+            error = "No height has been inputted."
+        elif float(height) <= 0:
+            error = "Invalid height has been inputted."
+        elif water_frequency == "":
+            error = "No water frequency has been inputted."
+        elif int(water_frequency) <= 0:
+            error = "Invalid watering frequency has been inputted."
+
+        if fertiliser_needed:
+            if fertiliser_type == "":
+                error = "No fertiliser type has been inputted."
+            elif fertiliser_freq == "":
+                error = "No fertiliser frequency has been inputted."
+            elif int(fertiliser_freq) <= 0:
+                error = "Invalid fertiliser frequency has been inputted."
+
+        if len(error) <= 0:
+            #no error detected in input fields
+            db.new_plant_record(name=name, species=species, birth_date=self.birth_date, water_frequency=water_frequency, fertiliser_needed=fertiliser_needed, fertiliser_type=fertiliser_type, fertiliser_frequency=fertiliser_freq)
+
+            #clear form after submission
+            self.name_input.text = ''
+            self.species_input.text = ''
+            self.birth_date_input.text = ''
+            self.height_input.text = ''
+            self.fert_checkbox.active = False
+            self.fert_type_input.text = ''
+            self.fert_freq_input.text = ''
+
+        else:
+            popup = Popup(title="Error!", content=Label(text=error), size_hint=(0.7, 0.3))
+            popup.open()
 
 class CustomPopup(Popup):
     def __init__(self, **kwargs):
@@ -738,8 +864,8 @@ class CustomPopup(Popup):
 
         # Set custom background color
         with self.canvas.before:
-            Color(0.2, 0.6, 0.2, 1)  # Green background (RGBA)
-            self.rect = RoundedRectangle(size=self.size, pos=self.pos, radius=[20, ])  # Rounded rectangle
+            Color(*COLOURS["accent"])
+            self.rect = RoundedRectangle(size=self.size, pos=self.pos, radius=[10, ])
 
         self.bind(size=self.update_graphics, pos=self.update_graphics)
 
