@@ -1,0 +1,16 @@
+MDDatePicker:
+    id: field
+    mode: "outlined"
+    pos_hint: {'center_x': .5, 'center_y': .85}
+    size_hint_x: .5
+    on_focus: app.show_date_picker(self.focus)
+
+    MDTextFieldHintText:
+        text: "Docked date picker"
+
+    MDTextFieldHelperText:
+        text: "MM/DD/YYYY"
+        mode: "persistent"
+
+    MDTextFieldTrailingIcon:
+        icon: "calendar"
