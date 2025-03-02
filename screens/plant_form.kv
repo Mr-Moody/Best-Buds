@@ -1,0 +1,47 @@
+<PlantForm>:
+    orientation: "vertical"
+    spacing: dp(10)
+    padding: dp(20)
+
+    MDTextField:
+        id: plant_name_input
+        hint_text: "Plant Name"
+        mode: "rectangle"
+
+    MDTextField:
+        id: species_input
+        hint_text: "Species"
+        mode: "rectangle"
+
+    MDTextField:
+        id: birth_date_input
+        hint_text: "Date of Birth (YYYY-MM-DD)"
+        mode: "rectangle"
+        on_focus: if self.focus: root.show_date_picker()
+
+    MDCheckbox:
+        id: fertiliser_checkbox
+        on_active: root.toggle_fertiliser_fields(self, self.active)
+
+    MDLabel:
+        text: "Uses Fertiliser?"
+        halign: "left"
+
+    MDTextField:
+        id: fert_type_input
+        hint_text: "Fertiliser Type"
+        mode: "rectangle"
+        disabled: True
+        opacity: 0.5
+
+    MDTextField:
+        id: fert_freq_input
+        hint_text: "Fertiliser Frequency"
+        mode: "rectangle"
+        disabled: True
+        opacity: 0.5
+
+    MDRaisedButton:
+        text: "Add Plant"
+        pos_hint: {"center_x": 0.5}
+        on_release: root.submit_form()

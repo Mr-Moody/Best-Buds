@@ -1,0 +1,51 @@
+ScreenManager:
+    id: screen_manager
+    HomeScreen:
+    CalendarScreen:
+    CameraScreen:
+    SettingsScreen:
+
+<HomeScreen>:
+    name: "home"
+    BoxLayout:
+        orientation: "vertical"
+        MDLabel:
+            id: greeting_label
+            text: "Welcome to BestBuds!"
+            halign: "center"
+            font_style: "H5"
+        ScrollView:
+            MDBoxLayout:
+                id: plant_list
+                orientation: "vertical"
+                adaptive_height: True
+                padding: dp(10)
+                spacing: dp(10)
+        MDRaisedButton:
+            text: "Add New Plant"
+            pos_hint: {"center_x": 0.5}
+            on_release: root.open_add_plant_dialog()
+
+<CalendarScreen>:
+    name: "calendar"
+    MDLabel:
+        text: "Calendar View"
+        halign: "center"
+
+<CameraScreen>:
+    name: "camera"
+    BoxLayout:
+        orientation: "vertical"
+        Camera:
+            id: camera
+            resolution: (640, 480)
+        MDRaisedButton:
+            text: "Capture"
+            pos_hint: {"center_x": 0.5}
+            on_release: root.capture_image()
+
+<SettingsScreen>:
+    name: "settings"
+    MDLabel:
+        text: "Settings"
+        halign: "center"
