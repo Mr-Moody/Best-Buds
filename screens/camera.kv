@@ -3,17 +3,26 @@
 
     BoxLayout:
         orientation: "vertical"
+        spacing: 10
+        padding: [20,20]
 
-        Camera:
-            id: camera_widget
-            resolution: (640, 480)
-            play: True      # starts cam feed
-            size_hint_y: 0.8
-        
+        BoxLayout:
+            size_hint_y: None
+            height: self.width
+            size_hint_x: 1
+            pos_hint: {"center_x": 0.5}
+
+            Image:
+                id: camera_widget
+                size_hint_y: 0.8
+                allow_stretch: False
+                keep_ratio: True
+
         Button:
-            background_color: app.colours["accent"]
+            background_color: app.colours["accent"]  
             size_hint_y: 0.2
-            size_hint_x: 0.1
+            halign: "center"
+            valign: "center"
             on_release: app.capture_picture()
 
         Label:
@@ -21,4 +30,5 @@
             text: "Take a picture of your plant!"
             font_size: 30
             font_name: "SecondaryFont"
+            color: 0,0,0,1
             halign: "center"
