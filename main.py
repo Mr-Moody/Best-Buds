@@ -26,7 +26,6 @@ from kivy.graphics import Color, RoundedRectangle
 from kivy.core.window import Window     # for fixed window
 from kivy.properties import StringProperty, ObjectProperty, DictProperty  # for idek what man property -> for dynamic variables
 
-
 from kivy.lang import Builder
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
