@@ -18,7 +18,6 @@ from kivy.metrics import dp
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.widget import Widget
-from kivy.uix.image import Image
 from kivy.uix.camera import Camera  # for taking photos
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.behaviors import ButtonBehavior
@@ -38,8 +37,12 @@ from kivy.core.text import LabelBase    # for fonts
 from kivy.graphics.texture import Texture   # for camera screen display?
 
 import os
-from PIL import Image   # for image manipulation
+from PIL import Image as PILImage  # for image manipulation
 import cv2      # for camera display
+
+from database import DB
+dir_path = os.path.dirname(os.path.realpath(__file__))
+db = DB()
 
 LabelBase.register(name="MainFont", fn_regular="static/fonts/EB_Garamond_static/EBGaramond-SemiBold.ttf")
 LabelBase.register(name="SecondaryFont", fn_regular="static/fonts/Comfortaa_static/Comfortaa-Light.ttf")
@@ -117,6 +120,7 @@ class BestBuds(MDApp):
         self.load_kv_files()  # load external kv files
         # return btn = ButtonWidget()
         root = Builder.load_file("myapp.kv")
+        self.root = root
 
         screen_manager = root.ids.screen_manager
         screen_manager.clear_widgets()
@@ -133,16 +137,17 @@ class BestBuds(MDApp):
             "settings": root.ids.settings_button,
         }
 
-        self.update_greeting()
-        Clock.schedule_once(self.update_greeting, 0.5)  # makes sure it updates after the UI loads
-        self.change_user_name("Tara")
-        return root
-
         layout = BoxLayout(orientation="vertical", padding=5, spacing=5)
         self.plant_viewer = PlantViewer(size_hint=(1, 0.2))  # Make it span across the screen
         layout.add_widget(self.plant_viewer)
 
-        return layout
+        home_screen = screen_manager.get_screen("home")
+        home_screen.add_widget(layout)
+        
+        self.update_greeting()
+        Clock.schedule_once(self.update_greeting, 0.5)  # makes sure it updates after the UI loads
+        self.change_user_name("Tara")
+        return root
     
     def load_kv_files(self):
         # load the kv files
