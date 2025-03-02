@@ -12,9 +12,6 @@ from kivy.uix.checkbox import CheckBox
 from kivy.uix.popup import Popup
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.lang import Builder
-from kivy.metrics import dp
-from kivy.lang import Builder
-from kivy.metrics import dp
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.widget import Widget
@@ -39,6 +36,14 @@ from kivy.graphics.texture import Texture   # for camera screen display?
 import os
 from PIL import Image as PILImage  # for image manipulation
 import cv2      # for camera display
+
+import openai
+import base64
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+if not OPENAI_API_KEY:
+    raise ValueError("Missing OpenAI API key! Set it into your environment w/ 'export OPENAI_API_KEY=""'")
 
 from database import DB
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -84,6 +89,12 @@ class CameraScreen(Screen):
     def on_enter(self):
         # start the opencv camera feed when entering the screen
         self.capture = cv2.VideoCapture(0)
+        
+        # check if cam opens properly
+        if not self.capture.isOpened():
+            print("Error: unable to access camera")
+            return
+        
         Clock.schedule_interval(self.update_camera, 1.0/30.0)      # updates every 30FPS
         
     def on_leave(self):
@@ -144,11 +155,12 @@ class BestBuds(MDApp):
         screen_manager.add_widget(SettingsScreen(name="settings"))
 
         self.buttons = {
-            "home": root.ids.home_button,
-            "calendar": root.ids.calendar_button,
-            "camera": root.ids.camera_button,
-            "settings": root.ids.settings_button,
+            "home": self.root.ids.home_button,
+            "calendar": self.root.ids.calendar_button,
+            "camera": self.root.ids.camera_button,
+            "settings": self.root.ids.settings_button,
         }
+        print(self.buttons)
 
         layout = BoxLayout(orientation="vertical", padding=5, spacing=5)
         self.plant_viewer = PlantViewer(size_hint=(1, 0.2))  # Make it span across the screen
@@ -177,8 +189,22 @@ class BestBuds(MDApp):
         if screen_name in self.root.ids.screen_manager.screen_names:
             self.current_screen = screen_name           # updates current screen
             self.root.ids.screen_manager.current = screen_name      # updates current screen
-            self.update_button_colour()
-            print(f"screen change!")
+            # self.update_button_colour()
+            # Reset all buttons to inactive
+            
+            # print(f"pressed button: {button.screen_name}")
+            
+            # for btn in self.buttons.values():
+            #     btn.bg_colour = self.colours["inactive"]
+            #     btn.canvas.ask_update()
+
+            # # Activate the selected button
+            # if isinstance(button, CustomImageButton):
+            #     print(f"{button.screen_name} is a button")
+            #     # button.bg_colour = self.colours["active"]
+            #     btn.canvas.ask_update()
+            
+            print(f"screen change to {screen_name}!")
         else:
             print(f"NO screen {screen_name} found!!!")
 
@@ -198,17 +224,22 @@ class BestBuds(MDApp):
 
     def update_button_colour(self):
         pass
+        # print(self.current_screen)
         # for name, btn in self.buttons.items():
+        #     print(name)
         #     if name == self.current_screen:
         #         btn.bg_colour = self.colours["active"]
+        #         print(f"{name} active")
         #     else:
         #         btn.bg_colour = self.colours["inactive"]
+        #         print(f"{name} inactive")
+                
 
     def change_user_name(self, new_name):
         self.username = new_name  
         self.update_greeting()    
             
-    def capture_picture(self):
+    def capture_picture(self, identify=True):
         # take piccy
         camera_screen = self.root.ids.screen_manager.get_screen("camera")
         
@@ -237,14 +268,23 @@ class BestBuds(MDApp):
         texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
 
         # Show confirmation popup with the generated texture
-        self.show_confirmation_popup(final_image, texture)
+        self.show_confirmation_popup(final_image, texture, identify)
 
-    def save_captured_image(self, image, popup):
+    def save_captured_image(self, image, popup, identify=True):
+        #check if directory exists yet
+        if not os.path.exists("images"):
+            os.makedirs("images")
+            
+        save_dir = "images/plants" if identify else "images/health"
+        
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+            
         # check how many already exist in the folder to number then sequentially
-        existing_images = [f for f in os.listdir("images") if f.endswith(".png")]
+        existing_images = [f for f in os.listdir(save_dir) if f.endswith(".png")]
         next_number = len(existing_images) + 1
 
-        filename = f"images/plant_{next_number}.png"
+        filename = f"{save_dir}/plant_{next_number}.png"
         cv2.imwrite(filename, image)  # save the cropped image
         
         if os.path.exists(filename):
@@ -258,8 +298,116 @@ class BestBuds(MDApp):
         # buf = cv2.flip(final_image, 0).tobytes()
         # texture = Texture.create(size=(final_image.shape[1], final_image.shape[0]), colorfmt='bgr')
         # texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+        
+        plant_name, health_status = None, None      # initialise to prevent unboundlocalerror
+        
+        if identify:
+            plant_name = self.identify_plant_with_openai(filename)
+            if plant_name: 
+                print(f"Identified Plant: {plant_name}")
+            else:
+                print("This does not appear to be a plant :(")
+            
+            
+        else:
+            health_status = self.check_plant_health(filename)        
+            if health_status:
+                print(f"Health status: {health_status}")
+            else:
+                print("No issues detected - you have a healthy plant!")
+    
+    def identify_plant_with_openai(self, image_path):
+        
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        # openai.api_key = OPENAI_API_KEY   # deprecated..
+        
+        try:
+            # read file in binary code
+            with open(image_path, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode()
+                
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert botanist. Identify the plant in the given image"
+                                    "If the image contains no plant, say 'No plant detected'"
+                                    "If unsure, say 'Unclear, but this might be a plant"
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Is there a plant? If so, what plant is this?"},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{base64_image}"}
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=50
+            )
+                
+            result = response.choices[0].message.content.strip()
+            
+            if "no plant" in result.lower() or "not a plant" in result.lower():
+                return None
+            if "unclear" in result.lower():
+                return "Possible plant, but unclear"
+            # else
+            return result
+        
+        except Exception as e:
+            print(f"Error identifying plant: {e}")
+            return None
 
-    def show_confirmation_popup(self, image, texture):
+    def check_plant_health(self, image_path):
+        
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        # openai.api_key = OPENAI_API_KEY   # deprecated..
+        
+        try:
+            # read file in binary code
+            with open(image_path, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode()
+                
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a plant health expert. Check for any disease, damage, or concerns in the plant image."
+                                    "If the of the plant is healthy, say 'Nothing wrong here'"
+                                    "If unsure, say 'Unclear"
+                    },
+                    {
+                        "role": "user", "content": [
+                            {"type": "text", "text": "Does this plant look healhty?"},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{base64_image}"}
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=50
+            )
+                
+            result = response.choices[0].message.content.strip()
+            
+            if "nothing wrong" in result.lower():
+                return None
+            if "unclear" in result.lower():
+                return "Possible damage, but unsure"
+            # else
+            return result
+        
+        except Exception as e:
+            print(f"Error identifying health: {e}")
+            return None
+
+    def show_confirmation_popup(self, image, texture, identify=True):
         """ Displays a popup asking the user to confirm or retake the picture. """
         
         layout = BoxLayout(orientation="vertical", spacing=10, padding=10)
@@ -271,11 +419,11 @@ class BestBuds(MDApp):
         buttons = BoxLayout(size_hint=(1, 0.3), spacing=10)
 
         # Confirm button
-        confirm_btn = Button(text="Confirm", size_hint=(0.5, 1))
-        confirm_btn.bind(on_release=lambda x: self.save_captured_image(image, popup))
+        confirm_btn = Button(text="Confirm", size_hint=(0.5, 1), background_color=self.colours["accent"], background_normal="", font_name="SecondaryFont")
+        confirm_btn.bind(on_release=lambda x: self.save_captured_image(image, popup, identify))
 
         # Retake button
-        retake_btn = Button(text="Retake", size_hint=(0.5, 1))
+        retake_btn = Button(text="Retake", size_hint=(0.5, 1), background_color=self.colours["active"], background_normal="",font_name="SecondaryFont")
         retake_btn.bind(on_release=lambda x: popup.dismiss())
 
         buttons.add_widget(confirm_btn)
@@ -341,7 +489,7 @@ class PlantWidget(ButtonBehavior, BoxLayout):
         self.background.size = (self.width - 4, self.height - 4)
 
     def set_image(self, plant_id):
-        self.image.source = f"{dir_path}/images/{plant_id}.jpg"
+        self.image.source = f"{dir_path}/images/plants/{plant_id}.jpg"
 
     def set_name(self, name):
         self.label.text = name

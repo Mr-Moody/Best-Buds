@@ -18,12 +18,35 @@
                 allow_stretch: False
                 keep_ratio: True
 
-        Button:
-            background_color: app.colours["accent"]  
-            size_hint_y: 0.2
+        BoxLayout:
+            orientation: "horizontal"
+            spacing: 5
+            size_hint_y: 0.4
             halign: "center"
             valign: "center"
-            on_release: app.capture_picture()
+
+
+            Button:
+                id: add_plant_button
+                text: "add a plant!"
+                font_name: "SecondaryFont"
+                font_size: 30
+                bold: True
+                background_normal: ""
+                size_hint_x: 0.5
+                background_color: app.colours["accent"]  
+                on_release: app.capture_picture(True)
+
+            Button:
+                id: plant_healthy_button
+                text: "plant healthy?"
+                font_name: "SecondaryFont"
+                font_size: 30
+                bold: True
+                background_normal: ""
+                size_hint_x: 0.5
+                background_color: app.colours["accent"]  
+                on_release: app.capture_picture(False)
 
         Label:
             id: camera_label

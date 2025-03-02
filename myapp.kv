@@ -12,12 +12,13 @@
 
     Button:
         size_hint: (1, 1)
-        background_normal: ""
-        background_down: ""
+        # background_normal: ""
+        # background_down: ""
         background_color: (1, 1, 1, 0)  # Transparent button
+        # on_press: self.background_color = app.colours["active"]
         on_release: 
-            app.change_screen(root.screen_name, self)
-            root.bg_colour = app.colours["active"]
+            app.change_screen(root.screen_name, root)
+            # self.background_color = app.colours["inactive"]
 
     Image:
         source: root.image_source
